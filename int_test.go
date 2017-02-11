@@ -94,6 +94,7 @@ func TestIndexes(t *testing.T) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 		if have, want := u, (Index{
+			Table:   "indexed",
 			Type:    "btree",
 			Unique:  true,
 			Columns: []string{"name"},
@@ -107,6 +108,7 @@ func TestIndexes(t *testing.T) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 		if have, want := u, (Index{
+			Table:   "indexed",
 			Type:    "btree",
 			Unique:  false,
 			Columns: []string{"major", "minor"},
@@ -120,6 +122,7 @@ func TestIndexes(t *testing.T) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 		if have, want := u, (Index{
+			Table:   "indexed",
 			Type:    "btree",
 			Unique:  false,
 			Columns: []string{"[function]", "minor"},
@@ -138,6 +141,7 @@ func TestIndexes(t *testing.T) {
 	{
 		u := d.Indexes["simple_pkey"]
 		if have, want := u, (Index{
+			Table:   "simple",
 			Type:    "btree",
 			Unique:  true,
 			Primary: true,

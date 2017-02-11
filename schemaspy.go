@@ -35,6 +35,7 @@ type Column struct {
 }
 
 type Index struct {
+	Table   string
 	Type    string
 	Unique  bool
 	Primary bool
@@ -159,6 +160,7 @@ func (s *Schema) addIndexes(oids *_OIDs) {
 				cols = append(cols, table.ColumnNames()[i-1])
 			}
 			s.Indexes[st.RelName] = Index{
+				Table:   tableName,
 				Type:    oids.am[st.RelAm].AmName,
 				Unique:  index.IndIsUnique,
 				Primary: index.IndIsPrimary,
