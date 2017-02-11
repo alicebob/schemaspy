@@ -40,16 +40,16 @@ func pgNamespace(conn Queryer) ([]schemaNamespace, error) {
 // tables (and related things like views)
 // https://www.postgresql.org/docs/9.6/static/catalog-pg-class.html
 type schemaClass struct {
-	OID     pgx.Oid
-	RelType pgx.Oid
 	RelName string
+	RelType pgx.Oid
+	RelAm   pgx.Oid
 	RelKind string
 }
 
-func pgClass(conn Queryer, namespace pgx.Oid) ([]schemaClass, error) {
+func pgClass(conn Queryer, namespace pgx.Oid) (map[pgx.Oid]schemaClass, error) {
 	rows, err := conn.Query(`
 			SELECT
-				oid, relname, reltype, relkind
+				oid, relname, reltype, relam, relkind
 			FROM
 				pg_catalog.pg_class
 			WHERE
@@ -60,13 +60,16 @@ func pgClass(conn Queryer, namespace pgx.Oid) ([]schemaClass, error) {
 	}
 	defer rows.Close()
 
-	var res []schemaClass
+	var res = map[pgx.Oid]schemaClass{}
 	for rows.Next() {
-		var t schemaClass
-		if err := rows.Scan(&t.OID, &t.RelName, &t.RelType, &t.RelKind); err != nil {
+		var (
+			t   schemaClass
+			oid pgx.Oid
+		)
+		if err := rows.Scan(&oid, &t.RelName, &t.RelType, &t.RelAm, &t.RelKind); err != nil {
 			return nil, err
 		}
-		res = append(res, t)
+		res[oid] = t
 	}
 	return res, rows.Err()
 }
@@ -113,11 +116,10 @@ func pgAttribute(conn Queryer) ([]schemaAttribute, error) {
 // types
 // https://www.postgresql.org/docs/9.6/static/catalog-pg-type.html
 type schemaType struct {
-	OID     pgx.Oid
 	TypName string
 }
 
-func pgType(conn Queryer) ([]schemaType, error) {
+func pgType(conn Queryer) (map[pgx.Oid]schemaType, error) {
 	rows, err := conn.Query(`
 			SELECT
 				oid, typname
@@ -129,16 +131,19 @@ func pgType(conn Queryer) ([]schemaType, error) {
 	}
 	defer rows.Close()
 
-	var res []schemaType
+	var res = map[pgx.Oid]schemaType{}
 	for rows.Next() {
-		var c schemaType
+		var (
+			c   schemaType
+			oid pgx.Oid
+		)
 		if err := rows.Scan(
-			&c.OID,
+			&oid,
 			&c.TypName,
 		); err != nil {
 			return nil, err
 		}
-		res = append(res, c)
+		res[oid] = c
 	}
 	return res, rows.Err()
 }
@@ -173,6 +178,85 @@ func pgInherits(conn Queryer) ([]schemaInherits, error) {
 			return nil, err
 		}
 		res = append(res, c)
+	}
+	return res, rows.Err()
+}
+
+// index
+// This is in addition to the entries in pg_class
+// https://www.postgresql.org/docs/9.6/static/catalog-pg-index.html
+type schemaIndex struct {
+	IndexRelID   pgx.Oid
+	IndRelID     pgx.Oid
+	IndIsUnique  bool
+	IndIsPrimary bool
+	IndKey       []int32
+}
+
+// pgIndex mapped to the pg_class entry they belong to
+func pgIndex(conn Queryer) (map[pgx.Oid]schemaIndex, error) {
+	// TODO: expressions can be rendered with:
+	// > pg_get_expr(indexprs, indrelid) as expression
+	// But no idea how to use that with multiple expressions.
+	rows, err := conn.Query(`
+			SELECT
+				indexrelid, indrelid, indisunique, indisprimary, indkey::int4[]
+			FROM
+				pg_catalog.pg_index
+		`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res = map[pgx.Oid]schemaIndex{}
+	for rows.Next() {
+		var c schemaIndex
+		if err := rows.Scan(
+			&c.IndexRelID,
+			&c.IndRelID,
+			&c.IndIsUnique,
+			&c.IndIsPrimary,
+			&c.IndKey,
+		); err != nil {
+			return nil, err
+		}
+		res[c.IndexRelID] = c
+	}
+	return res, rows.Err()
+}
+
+// am (access methods)
+// https://www.postgresql.org/docs/9.6/static/catalog-pg-am.html
+type schemaAm struct {
+	AmName string
+}
+
+func pgAm(conn Queryer) (map[pgx.Oid]schemaAm, error) {
+	rows, err := conn.Query(`
+			SELECT
+				oid, amname
+			FROM
+				pg_catalog.pg_am
+		`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res = map[pgx.Oid]schemaAm{}
+	for rows.Next() {
+		var (
+			c   schemaAm
+			oid pgx.Oid
+		)
+		if err := rows.Scan(
+			&oid,
+			&c.AmName,
+		); err != nil {
+			return nil, err
+		}
+		res[oid] = c
 	}
 	return res, rows.Err()
 }

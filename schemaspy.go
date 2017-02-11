@@ -10,25 +10,35 @@ package schemaspy
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/jackc/pgx"
 )
 
 type Schema struct {
-	Name   string
-	Tables map[string]Table
+	Name    string
+	Tables  map[string]Table
+	Indexes map[string]Index
 }
 
 type Table struct {
 	Columns  map[string]Column
 	Inherits []string
 	Children []string
+	Indexes  []string
 }
 
 type Column struct {
 	Type     string
 	NotNull  bool
 	Position int
+}
+
+type Index struct {
+	Type    string
+	Unique  bool
+	Primary bool
+	Columns []string // column name or '[function]' for expressions
 }
 
 // Describe a schema. This is the main entry point. Leave schema empty for the
@@ -61,12 +71,14 @@ found:
 	}
 
 	d := &Schema{
-		Name:   db.NspName,
-		Tables: map[string]Table{},
+		Name:    db.NspName,
+		Tables:  map[string]Table{},
+		Indexes: map[string]Index{},
 	}
 	d.addTables(oids)
 	d.addInherits(oids)
 	d.addColumns(oids)
+	d.addIndexes(oids)
 
 	return d, nil
 }
@@ -128,6 +140,38 @@ func (s *Schema) addColumns(oids *OIDs) {
 	}
 }
 
+func (s *Schema) addIndexes(oids *OIDs) {
+	// indexes columns are split over pg_class 'i' records, and over pg_index
+	for tOid, st := range oids.class {
+		switch st.RelKind {
+		case "i": // index
+			index := oids.index[tOid]
+			tableName := oids.class[index.IndRelID].RelName
+			table := s.Tables[tableName]
+
+			var cols []string
+			for _, i := range index.IndKey {
+				if i == 0 {
+					// TODO: indexprs could be used to render the function
+					cols = append(cols, "[function]")
+					continue
+				}
+				cols = append(cols, table.ColumnNames()[i-1])
+			}
+			s.Indexes[st.RelName] = Index{
+				Type:    oids.am[st.RelAm].AmName,
+				Unique:  index.IndIsUnique,
+				Primary: index.IndIsPrimary,
+				Columns: cols,
+			}
+
+			table.Indexes = append(table.Indexes, st.RelName)
+			sort.Strings(table.Indexes)
+			s.Tables[tableName] = table
+		}
+	}
+}
+
 // ColumnNames lists all columns in table order
 func (t *Table) ColumnNames() []string {
 	var names = make([]string, len(t.Columns))
@@ -142,41 +186,45 @@ type OIDs struct {
 	typ       map[pgx.Oid]schemaType
 	inherits  []schemaInherits
 	attribute []schemaAttribute
+	index     map[pgx.Oid]schemaIndex
+	am        map[pgx.Oid]schemaAm
 }
 
 func loadSchema(tx *pgx.Tx, schema pgx.Oid) (*OIDs, error) {
-	m := &OIDs{
-		class: map[pgx.Oid]schemaClass{},
-		typ:   map[pgx.Oid]schemaType{},
-	}
+	var (
+		m   = &OIDs{}
+		err error
+	)
 
-	classes, err := pgClass(tx, schema)
+	m.class, err = pgClass(tx, schema)
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range classes {
-		m.class[c.OID] = c
-	}
 
-	types, err := pgType(tx)
+	m.typ, err = pgType(tx)
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range types {
-		m.typ[t.OID] = t
-	}
 
-	inherits, err := pgInherits(tx)
+	m.inherits, err = pgInherits(tx)
 	if err != nil {
 		return nil, err
 	}
-	m.inherits = inherits
 
-	attrs, err := pgAttribute(tx)
+	m.attribute, err = pgAttribute(tx)
 	if err != nil {
 		return nil, err
 	}
-	m.attribute = attrs
+
+	m.index, err = pgIndex(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	m.am, err = pgAm(tx)
+	if err != nil {
+		return nil, err
+	}
 
 	return m, nil
 }
