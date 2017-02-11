@@ -83,7 +83,7 @@ found:
 	return d, nil
 }
 
-func (s *Schema) addTables(oids *OIDs) {
+func (s *Schema) addTables(oids *_OIDs) {
 	for _, st := range oids.class {
 		switch st.RelKind {
 		case "r":
@@ -95,7 +95,7 @@ func (s *Schema) addTables(oids *OIDs) {
 	}
 }
 
-func (s *Schema) addInherits(oids *OIDs) {
+func (s *Schema) addInherits(oids *_OIDs) {
 	for _, e := range oids.inherits {
 		childO, ok := oids.class[e.InhRelID]
 		if !ok {
@@ -116,7 +116,7 @@ func (s *Schema) addInherits(oids *OIDs) {
 	}
 }
 
-func (s *Schema) addColumns(oids *OIDs) {
+func (s *Schema) addColumns(oids *_OIDs) {
 	for _, ct := range oids.attribute {
 		cl, ok := oids.class[ct.AttRelID]
 		if !ok {
@@ -140,7 +140,7 @@ func (s *Schema) addColumns(oids *OIDs) {
 	}
 }
 
-func (s *Schema) addIndexes(oids *OIDs) {
+func (s *Schema) addIndexes(oids *_OIDs) {
 	// indexes columns are split over pg_class 'i' records, and over pg_index
 	for tOid, st := range oids.class {
 		switch st.RelKind {
@@ -181,7 +181,8 @@ func (t *Table) ColumnNames() []string {
 	return names
 }
 
-type OIDs struct {
+// _OIDs has all the info from the pg_catalog tables in raw format
+type _OIDs struct {
 	class     map[pgx.Oid]schemaClass
 	typ       map[pgx.Oid]schemaType
 	inherits  []schemaInherits
@@ -190,9 +191,9 @@ type OIDs struct {
 	am        map[pgx.Oid]schemaAm
 }
 
-func loadSchema(tx *pgx.Tx, schema pgx.Oid) (*OIDs, error) {
+func loadSchema(tx *pgx.Tx, schema pgx.Oid) (*_OIDs, error) {
 	var (
-		m   = &OIDs{}
+		m   = &_OIDs{}
 		err error
 	)
 

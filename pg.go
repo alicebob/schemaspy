@@ -4,8 +4,8 @@ import (
 	"github.com/jackc/pgx"
 )
 
-// Queryer is either a ConnPool, a Conn, or a Tx.
-type Queryer interface {
+// queryer is either a ConnPool, a Conn, or a Tx.
+type queryer interface {
 	Query(sql string, args ...interface{}) (*pgx.Rows, error)
 }
 
@@ -14,7 +14,7 @@ type schemaNamespace struct {
 	NspName string
 }
 
-func pgNamespace(conn Queryer) ([]schemaNamespace, error) {
+func pgNamespace(conn queryer) ([]schemaNamespace, error) {
 	rows, err := conn.Query(`
 		SELECT
 			oid, nspname
@@ -46,7 +46,7 @@ type schemaClass struct {
 	RelKind string
 }
 
-func pgClass(conn Queryer, namespace pgx.Oid) (map[pgx.Oid]schemaClass, error) {
+func pgClass(conn queryer, namespace pgx.Oid) (map[pgx.Oid]schemaClass, error) {
 	rows, err := conn.Query(`
 			SELECT
 				oid, relname, reltype, relam, relkind
@@ -84,7 +84,7 @@ type schemaAttribute struct {
 	AttNotNull bool
 }
 
-func pgAttribute(conn Queryer) ([]schemaAttribute, error) {
+func pgAttribute(conn queryer) ([]schemaAttribute, error) {
 	rows, err := conn.Query(`
 			SELECT
 				attrelid, attname, atttypid, attnum, attnotnull
@@ -119,7 +119,7 @@ type schemaType struct {
 	TypName string
 }
 
-func pgType(conn Queryer) (map[pgx.Oid]schemaType, error) {
+func pgType(conn queryer) (map[pgx.Oid]schemaType, error) {
 	rows, err := conn.Query(`
 			SELECT
 				oid, typname
@@ -155,7 +155,7 @@ type schemaInherits struct {
 	InhSeqNo            int
 }
 
-func pgInherits(conn Queryer) ([]schemaInherits, error) {
+func pgInherits(conn queryer) ([]schemaInherits, error) {
 	rows, err := conn.Query(`
 			SELECT
 				inhrelid, inhparent, inhseqno
@@ -194,7 +194,7 @@ type schemaIndex struct {
 }
 
 // pgIndex mapped to the pg_class entry they belong to
-func pgIndex(conn Queryer) (map[pgx.Oid]schemaIndex, error) {
+func pgIndex(conn queryer) (map[pgx.Oid]schemaIndex, error) {
 	// TODO: expressions can be rendered with:
 	// > pg_get_expr(indexprs, indrelid) as expression
 	// But no idea how to use that with multiple expressions.
@@ -232,7 +232,7 @@ type schemaAm struct {
 	AmName string
 }
 
-func pgAm(conn Queryer) (map[pgx.Oid]schemaAm, error) {
+func pgAm(conn queryer) (map[pgx.Oid]schemaAm, error) {
 	rows, err := conn.Query(`
 			SELECT
 				oid, amname
