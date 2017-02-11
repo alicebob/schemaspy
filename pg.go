@@ -65,3 +65,53 @@ func pgTables(conn Queryer) ([]schemaTable, error) {
 	}
 	return res, rows.Err()
 }
+
+type schemaColumn struct {
+	TableCatalog    string
+	TableSchema     string
+	TableName       string
+	ColumnName      string
+	OrdinalPosition int
+	ColumnDefault   *string
+	IsNullable      string
+	DataType        string
+}
+
+func pgColumns(conn Queryer) ([]schemaColumn, error) {
+	rows, err := conn.Query(`
+			SELECT
+				table_catalog
+				, table_schema
+				, table_name
+				, column_name
+				, ordinal_position
+				, column_default
+				, is_nullable
+				, data_type
+			FROM
+				information_schema.columns
+		`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []schemaColumn
+	for rows.Next() {
+		var c schemaColumn
+		if err := rows.Scan(
+			&c.TableCatalog,
+			&c.TableSchema,
+			&c.TableName,
+			&c.ColumnName,
+			&c.OrdinalPosition,
+			&c.ColumnDefault,
+			&c.IsNullable,
+			&c.DataType,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, rows.Err()
+}

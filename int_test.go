@@ -3,6 +3,7 @@
 package schemaspy
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/jackc/pgx"
@@ -32,6 +33,23 @@ func Test(t *testing.T) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 		if have, want := len(tab.Columns), 3; have != want {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+		if have, want := []string{"id", "name", "t"}, tab.ColumnNames(); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+		if have, want := (Column{
+			Type:            "uuid",
+			Nullable:        false,
+			OrdinalPosition: 1,
+		}), tab.Columns["id"]; have != want {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+		if have, want := (Column{
+			Type:            "text",
+			Nullable:        true,
+			OrdinalPosition: 2,
+		}), tab.Columns["name"]; have != want {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 	}

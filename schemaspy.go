@@ -24,10 +24,9 @@ type Table struct {
 }
 
 type Column struct {
-	Name string
-	Type string
-	// Null bool
-	// ...
+	Type            string
+	Nullable        bool
+	OrdinalPosition int
 }
 
 // Describe the current catalog (database). This is the main entry point.
@@ -59,6 +58,14 @@ func Describe(db *pgx.ConnPool) (*Catalog, error) {
 		return d, err
 	}
 
+	columns, err := pgColumns(db)
+	if err != nil {
+		return d, err
+	}
+	if err := d.addColumns(columns); err != nil {
+		return d, err
+	}
+
 	return d, nil
 }
 
@@ -71,9 +78,41 @@ func (c *Catalog) addTables(ts []schemaTable) error {
 			continue
 		}
 		t := Table{
-			Type: st.Type,
+			Type:    st.Type,
+			Columns: map[string]Column{},
 		}
 		c.Tables[st.Name] = t
 	}
 	return nil
+}
+
+func (c *Catalog) addColumns(cs []schemaColumn) error {
+	for _, ct := range cs {
+		if ct.TableCatalog != c.Name {
+			continue
+		}
+		if ct.TableSchema != "public" {
+			continue
+		}
+		col := Column{
+			Type:            ct.DataType,
+			Nullable:        ct.IsNullable == "YES",
+			OrdinalPosition: ct.OrdinalPosition,
+		}
+		tab, ok := c.Tables[ct.TableName]
+		if !ok {
+			return fmt.Errorf("unexpected table: %s", ct.TableName)
+		}
+		tab.Columns[ct.ColumnName] = col
+	}
+	return nil
+}
+
+// ColumnNames lists all columns in table order
+func (t *Table) ColumnNames() []string {
+	names := make([]string, len(t.Columns))
+	for c, d := range t.Columns {
+		names[d.OrdinalPosition-1] = c
+	}
+	return names
 }
