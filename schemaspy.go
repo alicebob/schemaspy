@@ -20,20 +20,19 @@ type Schema struct {
 }
 
 type Table struct {
-	OID      uint32
 	Columns  map[string]Column
 	Inherits []string
 	Children []string
 }
 
 type Column struct {
-	OID      uint32
 	Type     string
 	NotNull  bool
 	Position int
 }
 
-// Describe a schema. This is the main entry point. Leave schema empty for the public schema.
+// Describe a schema. This is the main entry point. Leave schema empty for the
+// public schema.
 func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
 	if schema == "" {
 		schema = "public"
@@ -65,7 +64,6 @@ found:
 		Name:   db.NspName,
 		Tables: map[string]Table{},
 	}
-
 	d.addTables(oids)
 	d.addInherits(oids)
 	d.addColumns(oids)

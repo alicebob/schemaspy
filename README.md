@@ -1,9 +1,8 @@
 # What
 
 Schemaspy gets a schema from a PostgreSQL server as a simple Go datastructure.
-It describes which tables there are, their columns, &c. Schemaspy only reads
-the current database definition; any changes to the database need to be done by
-other means, such as `ALTER TABLE ...`.
+It describes which tables there are, their columns, &c. Schemaspy only reads; any changes to the database need to be done by
+other means, such as `ALTER TABLE`.
 
 # Use cases
 
