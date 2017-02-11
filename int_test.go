@@ -16,15 +16,15 @@ const (
 func Test(t *testing.T) {
 	db := mustDBPool(t)
 
-	d, err := Describe(db)
+	d, err := Describe(db, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have, want := d.Name, "schemaspy"; have != want {
+	if have, want := d.Name, "public"; have != want {
 		t.Errorf("have %#v, want %#v", have, want)
 	}
 
-	if have, want := len(d.Tables), 1; have != want {
+	if have, want := len(d.Tables), 3; have != want {
 		t.Errorf("have %#v, want %#v", have, want)
 	}
 	{
@@ -33,23 +33,39 @@ func Test(t *testing.T) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 		if have, want := len(tab.Columns), 3; have != want {
-			t.Errorf("have %#v, want %#v", have, want)
+			t.Fatalf("have %#v, want %#v", have, want)
 		}
 		if have, want := []string{"id", "name", "t"}, tab.ColumnNames(); !reflect.DeepEqual(have, want) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 		if have, want := (Column{
-			Type:            "uuid",
-			Nullable:        false,
-			OrdinalPosition: 1,
+			Type:     "uuid",
+			NotNull:  true,
+			Position: 1,
 		}), tab.Columns["id"]; have != want {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 		if have, want := (Column{
-			Type:            "text",
-			Nullable:        true,
-			OrdinalPosition: 2,
+			Type:     "text",
+			NotNull:  false,
+			Position: 2,
 		}), tab.Columns["name"]; have != want {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+
+	{
+		tab := d.Tables["root"]
+		if have, want := tab.Inherits, []string(nil); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+		if have, want := tab.Children, []string{"root_123"}; !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+	{
+		tab := d.Tables["root_123"]
+		if have, want := tab.Inherits, []string{"root"}; !reflect.DeepEqual(have, want) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
 	}

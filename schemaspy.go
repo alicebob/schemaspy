@@ -1,9 +1,10 @@
-// schemaspy reads the definition of Postgres's databases, tables, functions,
-// &c.
+// schemaspy reads the definition of a PostgreSQL schema: tables, functions,
+// indexes &c. and returns it as a datastructure.
 //
-// It can't change things; the use case is for maintance and setup scripts
+// It can't change things; the use case is for maintenance and setup scripts
 // which need to inspect the current state of the database. Those scripts are
-// expected to draw their conclusions and apply changes with `ALTER` commands.
+// expected to draw their conclusions and if needed apply their changes with
+// `ALTER` commands.
 //
 package schemaspy
 
@@ -13,106 +14,171 @@ import (
 	"github.com/jackc/pgx"
 )
 
-type Catalog struct {
+type Schema struct {
 	Name   string
 	Tables map[string]Table
 }
 
 type Table struct {
-	Type    string
-	Columns map[string]Column
+	OID      uint32
+	Columns  map[string]Column
+	Inherits []string
+	Children []string
 }
 
 type Column struct {
-	Type            string
-	Nullable        bool
-	OrdinalPosition int
+	OID      uint32
+	Type     string
+	NotNull  bool
+	Position int
 }
 
-// Describe the current catalog (database). This is the main entry point.
-func Describe(db *pgx.ConnPool) (*Catalog, error) {
-	tx, err := db.Begin()
+// Describe a schema. This is the main entry point. Leave schema empty for the public schema.
+func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
+	if schema == "" {
+		schema = "public"
+	}
+	tx, err := conn.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	d := &Catalog{
-		Tables: map[string]Table{},
-	}
-
-	names, err := pgCatalogName(tx)
+	dbs, err := pgNamespace(tx)
 	if err != nil {
 		return nil, err
 	}
-	if found := len(names); found != 1 {
-		return nil, fmt.Errorf("expected 1 catalog_name row, got %d", found)
+	var db schemaNamespace
+	for _, db = range dbs {
+		if db.NspName == schema {
+			goto found
+		}
 	}
-	d.Name = names[0].CatalogName
-
-	tables, err := pgTables(db)
+	return nil, fmt.Errorf("schema %q not found in pg_catalog", schema)
+found:
+	oids, err := loadSchema(tx, db.OID)
 	if err != nil {
-		return d, err
-	}
-	if err := d.addTables(tables); err != nil {
-		return d, err
+		return nil, err
 	}
 
-	columns, err := pgColumns(db)
-	if err != nil {
-		return d, err
+	d := &Schema{
+		Name:   db.NspName,
+		Tables: map[string]Table{},
 	}
-	if err := d.addColumns(columns); err != nil {
-		return d, err
-	}
+
+	d.addTables(oids)
+	d.addInherits(oids)
+	d.addColumns(oids)
 
 	return d, nil
 }
 
-func (c *Catalog) addTables(ts []schemaTable) error {
-	for _, st := range ts {
-		if st.Catalog != c.Name {
-			continue
+func (s *Schema) addTables(oids *OIDs) {
+	for _, st := range oids.class {
+		switch st.RelKind {
+		case "r":
+			// ordinary table
+			s.Tables[st.RelName] = Table{
+				Columns: map[string]Column{},
+			}
 		}
-		if st.Schema != "public" {
-			continue
-		}
-		t := Table{
-			Type:    st.Type,
-			Columns: map[string]Column{},
-		}
-		c.Tables[st.Name] = t
 	}
-	return nil
 }
 
-func (c *Catalog) addColumns(cs []schemaColumn) error {
-	for _, ct := range cs {
-		if ct.TableCatalog != c.Name {
-			continue
-		}
-		if ct.TableSchema != "public" {
-			continue
-		}
-		col := Column{
-			Type:            ct.DataType,
-			Nullable:        ct.IsNullable == "YES",
-			OrdinalPosition: ct.OrdinalPosition,
-		}
-		tab, ok := c.Tables[ct.TableName]
+func (s *Schema) addInherits(oids *OIDs) {
+	for _, e := range oids.inherits {
+		childO, ok := oids.class[e.InhRelID]
 		if !ok {
-			return fmt.Errorf("unexpected table: %s", ct.TableName)
+			continue
 		}
-		tab.Columns[ct.ColumnName] = col
+		childTable := childO.RelName
+		parentO, ok := oids.class[e.InhParent]
+		if !ok {
+			continue
+		}
+		parentTable := parentO.RelName
+		child := s.Tables[childTable]
+		child.Inherits = append(child.Inherits, parentTable)
+		s.Tables[childTable] = child
+		parent := s.Tables[parentTable]
+		parent.Children = append(parent.Children, childTable)
+		s.Tables[parentTable] = parent
 	}
-	return nil
+}
+
+func (s *Schema) addColumns(oids *OIDs) {
+	for _, ct := range oids.attribute {
+		cl, ok := oids.class[ct.AttRelID]
+		if !ok {
+			continue
+		}
+		tab, ok := s.Tables[cl.RelName]
+		if !ok {
+			// not in our schema
+			continue
+		}
+		if ct.AttNum < 0 {
+			// system column
+			continue
+		}
+		tab.Columns[ct.AttName] = Column{
+			Type:     oids.typ[ct.AttTypID].TypName,
+			NotNull:  ct.AttNotNull,
+			Position: ct.AttNum,
+		}
+		s.Tables[cl.RelName] = tab
+	}
 }
 
 // ColumnNames lists all columns in table order
 func (t *Table) ColumnNames() []string {
-	names := make([]string, len(t.Columns))
+	var names = make([]string, len(t.Columns))
 	for c, d := range t.Columns {
-		names[d.OrdinalPosition-1] = c
+		names[d.Position-1] = c
 	}
 	return names
+}
+
+type OIDs struct {
+	class     map[pgx.Oid]schemaClass
+	typ       map[pgx.Oid]schemaType
+	inherits  []schemaInherits
+	attribute []schemaAttribute
+}
+
+func loadSchema(tx *pgx.Tx, schema pgx.Oid) (*OIDs, error) {
+	m := &OIDs{
+		class: map[pgx.Oid]schemaClass{},
+		typ:   map[pgx.Oid]schemaType{},
+	}
+
+	classes, err := pgClass(tx, schema)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range classes {
+		m.class[c.OID] = c
+	}
+
+	types, err := pgType(tx)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range types {
+		m.typ[t.OID] = t
+	}
+
+	inherits, err := pgInherits(tx)
+	if err != nil {
+		return nil, err
+	}
+	m.inherits = inherits
+
+	attrs, err := pgAttribute(tx)
+	if err != nil {
+		return nil, err
+	}
+	m.attribute = attrs
+
+	return m, nil
 }

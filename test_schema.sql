@@ -4,3 +4,10 @@ CREATE TABLE simple
   , name text NULL
   , t timestamptz
   );
+
+DROP TABLE IF EXISTS root_123;
+DROP TABLE IF EXISTS root;
+CREATE TABLE root
+  ( id text NOT NULL
+  );
+CREATE TABLE root_123 () INHERITS (root);
