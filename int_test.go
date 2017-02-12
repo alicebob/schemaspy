@@ -15,7 +15,7 @@ const (
 
 func setup(t *testing.T) *Schema {
 	db := mustDBPool(t)
-	d, err := Describe(db, "")
+	d, err := Describe(db, "schemaspyint")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func setup(t *testing.T) *Schema {
 func Test(t *testing.T) {
 	d := setup(t)
 
-	if have, want := d.Name, "public"; have != want {
+	if have, want := d.Name, "schemaspyint"; have != want {
 		t.Errorf("have %#v, want %#v", have, want)
 	}
 

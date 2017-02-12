@@ -1,18 +1,18 @@
-DROP TABLE IF EXISTS simple;
+DROP SCHEMA IF EXISTS schemaspyint CASCADE;
+CREATE SCHEMA schemaspyint;
+SET search_path TO schemaspyint;
+
 CREATE TABLE simple
   ( id uuid PRIMARY KEY
   , name text NULL
   , t timestamptz
   );
 
-DROP TABLE IF EXISTS root_123;
-DROP TABLE IF EXISTS root;
 CREATE TABLE root
   ( id text NOT NULL
   );
 CREATE TABLE root_123 () INHERITS (root);
 
-DROP TABLE IF EXISTS indexed;
 CREATE TABLE indexed
   ( major int
   , minor int
