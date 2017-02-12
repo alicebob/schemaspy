@@ -14,7 +14,8 @@ type schemaNamespace struct {
 	NspName string
 }
 
-func pgNamespace(conn queryer) ([]schemaNamespace, error) {
+// map with the namespace(schema) as key
+func pgNamespace(conn queryer) (map[string]schemaNamespace, error) {
 	rows, err := conn.Query(`
 		SELECT
 			oid, nspname
@@ -26,13 +27,13 @@ func pgNamespace(conn queryer) ([]schemaNamespace, error) {
 	}
 	defer rows.Close()
 
-	var res []schemaNamespace
+	var res = map[string]schemaNamespace{}
 	for rows.Next() {
 		var c schemaNamespace
 		if err := rows.Scan(&c.OID, &c.NspName); err != nil {
 			return nil, err
 		}
-		res = append(res, c)
+		res[c.NspName] = c
 	}
 	return res, rows.Err()
 }

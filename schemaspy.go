@@ -58,14 +58,10 @@ func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	var db schemaNamespace
-	for _, db = range dbs {
-		if db.NspName == schema {
-			goto found
-		}
+	db, ok := dbs[schema]
+	if !ok {
+		return nil, fmt.Errorf("schema %q not found in pg_catalog", schema)
 	}
-	return nil, fmt.Errorf("schema %q not found in pg_catalog", schema)
-found:
 	oids, err := loadSchema(tx, db.OID)
 	if err != nil {
 		return nil, err
