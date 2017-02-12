@@ -16,12 +16,29 @@ import (
 )
 
 type Schema struct {
-	Name    string
-	Tables  map[string]Table
+	Name string
+
+	// Relations are all tables, views, and materialized views
+	Relations map[string]Relation
+
+	// all plain tables, ordered alphabetically. Every table has an entry in
+	// Relations
+	Tables []string
+
+	// all views, ordered alphabetically. Every view has an entry in Relations
+	Views []string
+
+	// all materialized views, ordered alphabetically. Every materialized view
+	// has an entry in Relations
+	Materialized []string
+
 	Indexes map[string]Index
 }
 
-type Table struct {
+// Relation is a table, view, or materialized view.
+type Relation struct {
+	// Type is "table", "view", or "materialized view"
+	Type     string
 	Columns  map[string]Column
 	Inherits []string
 	Children []string
@@ -68,11 +85,11 @@ func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
 	}
 
 	d := &Schema{
-		Name:    db.NspName,
-		Tables:  map[string]Table{},
-		Indexes: map[string]Index{},
+		Name:      db.NspName,
+		Relations: map[string]Relation{},
+		Indexes:   map[string]Index{},
 	}
-	d.addTables(oids)
+	d.addRelations(oids)
 	d.addInherits(oids)
 	d.addColumns(oids)
 	d.addIndexes(oids)
@@ -80,15 +97,28 @@ func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
 	return d, nil
 }
 
-func (s *Schema) addTables(oids *_OIDs) {
+func (s *Schema) addRelations(oids *_OIDs) {
 	for _, st := range oids.class {
+		r := Relation{
+			Columns: map[string]Column{},
+		}
 		switch st.RelKind {
 		case "r":
-			// ordinary table
-			s.Tables[st.RelName] = Table{
-				Columns: map[string]Column{},
-			}
+			r.Type = "table"
+			s.Tables = append(s.Tables, st.RelName)
+			sort.Strings(s.Tables)
+		case "v":
+			r.Type = "view"
+			s.Views = append(s.Views, st.RelName)
+			sort.Strings(s.Views)
+		case "m":
+			r.Type = "materialized view"
+			s.Materialized = append(s.Materialized, st.RelName)
+			sort.Strings(s.Materialized)
+		default:
+			continue
 		}
+		s.Relations[st.RelName] = r
 	}
 }
 
@@ -104,36 +134,36 @@ func (s *Schema) addInherits(oids *_OIDs) {
 			continue
 		}
 		parentTable := parentO.RelName
-		child := s.Tables[childTable]
+		child := s.Relations[childTable]
 		child.Inherits = append(child.Inherits, parentTable)
-		s.Tables[childTable] = child
-		parent := s.Tables[parentTable]
+		s.Relations[childTable] = child
+		parent := s.Relations[parentTable]
 		parent.Children = append(parent.Children, childTable)
-		s.Tables[parentTable] = parent
+		s.Relations[parentTable] = parent
 	}
 }
 
 func (s *Schema) addColumns(oids *_OIDs) {
 	for _, ct := range oids.attribute {
-		cl, ok := oids.class[ct.AttRelID]
-		if !ok {
-			continue
-		}
-		tab, ok := s.Tables[cl.RelName]
-		if !ok {
-			// not in our schema
-			continue
-		}
 		if ct.AttNum < 0 {
 			// system column
 			continue
 		}
-		tab.Columns[ct.AttName] = Column{
+
+		cl, ok := oids.class[ct.AttRelID]
+		if !ok {
+			continue
+		}
+		rel, ok := s.Relations[cl.RelName]
+		if !ok {
+			continue
+		}
+		rel.Columns[ct.AttName] = Column{
 			Type:     oids.typ[ct.AttTypID].TypName,
 			NotNull:  ct.AttNotNull,
 			Position: ct.AttNum,
 		}
-		s.Tables[cl.RelName] = tab
+		s.Relations[cl.RelName] = rel
 	}
 }
 
@@ -143,8 +173,8 @@ func (s *Schema) addIndexes(oids *_OIDs) {
 		switch st.RelKind {
 		case "i": // index
 			index := oids.index[tOid]
-			tableName := oids.class[index.IndRelID].RelName
-			table := s.Tables[tableName]
+			relName := oids.class[index.IndRelID].RelName
+			rel := s.Relations[relName]
 
 			var cols []string
 			for _, i := range index.IndKey {
@@ -153,25 +183,25 @@ func (s *Schema) addIndexes(oids *_OIDs) {
 					cols = append(cols, "[function]")
 					continue
 				}
-				cols = append(cols, table.ColumnNames()[i-1])
+				cols = append(cols, rel.ColumnNames()[i-1])
 			}
 			s.Indexes[st.RelName] = Index{
-				Table:   tableName,
+				Table:   relName,
 				Type:    oids.am[st.RelAm].AmName,
 				Unique:  index.IndIsUnique,
 				Primary: index.IndIsPrimary,
 				Columns: cols,
 			}
 
-			table.Indexes = append(table.Indexes, st.RelName)
-			sort.Strings(table.Indexes)
-			s.Tables[tableName] = table
+			rel.Indexes = append(rel.Indexes, st.RelName)
+			sort.Strings(rel.Indexes)
+			s.Relations[relName] = rel
 		}
 	}
 }
 
-// ColumnNames lists all columns in table order
-func (t *Table) ColumnNames() []string {
+// ColumnNames lists all columns in database order
+func (t *Relation) ColumnNames() []string {
 	var names = make([]string, len(t.Columns))
 	for c, d := range t.Columns {
 		names[d.Position-1] = c

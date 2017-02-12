@@ -37,9 +37,12 @@ func Test(t *testing.T) {
 func TestSimple(t *testing.T) {
 	d := setup(t)
 
-	tab, ok := d.Tables["simple"]
+	tab, ok := d.Relations["simple"]
 	if have, want := ok, true; have != want {
 		t.Errorf("have %#v, want %#v", have, want)
+	}
+	if have, want := tab.Type, "table"; have != want {
+		t.Fatalf("have %#v, want %#v", have, want)
 	}
 	if have, want := len(tab.Columns), 3; have != want {
 		t.Fatalf("have %#v, want %#v", have, want)
@@ -67,7 +70,7 @@ func TestInherit(t *testing.T) {
 	d := setup(t)
 
 	{
-		tab := d.Tables["root"]
+		tab := d.Relations["root"]
 		if have, want := tab.Inherits, []string(nil); !reflect.DeepEqual(have, want) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
@@ -76,7 +79,7 @@ func TestInherit(t *testing.T) {
 		}
 	}
 	{
-		tab := d.Tables["root_123"]
+		tab := d.Relations["root_123"]
 		if have, want := tab.Inherits, []string{"root"}; !reflect.DeepEqual(have, want) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}
@@ -131,7 +134,7 @@ func TestIndexes(t *testing.T) {
 		}
 	}
 
-	if have, want := d.Tables["indexed"].Indexes, []string{
+	if have, want := d.Relations["indexed"].Indexes, []string{
 		"index_indexed", "indexed_name_lower_idx", "unique_indexed",
 	}; !reflect.DeepEqual(have, want) {
 		t.Fatalf("have %#v, want %#v", have, want)
@@ -146,6 +149,59 @@ func TestIndexes(t *testing.T) {
 			Unique:  true,
 			Primary: true,
 			Columns: []string{"id"},
+		}); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+}
+
+func TestViews(t *testing.T) {
+	d := setup(t)
+
+	if have, want := d.Views, []string{"myview_now"}; !reflect.DeepEqual(have, want) {
+		t.Errorf("have %#v, want %#v", have, want)
+	}
+
+	{
+		u := d.Relations["myview_now"]
+		if have, want := u, (Relation{
+			Type: "view",
+			Columns: map[string]Column{
+				"id": {
+					Type:     "uuid",
+					Position: 1,
+				},
+				"name": {
+					Type:     "text",
+					Position: 2,
+				},
+			},
+		}); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+}
+
+func TestMaterialized(t *testing.T) {
+	d := setup(t)
+	if have, want := d.Materialized, []string{"myview_forever"}; !reflect.DeepEqual(have, want) {
+		t.Errorf("have %#v, want %#v", have, want)
+	}
+
+	{
+		u := d.Relations["myview_forever"]
+		if have, want := u, (Relation{
+			Type: "materialized view",
+			Columns: map[string]Column{
+				"id": {
+					Type:     "uuid",
+					Position: 1,
+				},
+				"name": {
+					Type:     "text",
+					Position: 2,
+				},
+			},
 		}); !reflect.DeepEqual(have, want) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}

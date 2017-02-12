@@ -21,3 +21,6 @@ CREATE TABLE indexed
 CREATE INDEX index_indexed ON indexed (major, minor);
 CREATE UNIQUE INDEX unique_indexed ON indexed (name);
 CREATE INDEX indexed_name_lower_idx ON indexed (lower(name), minor);
+
+CREATE VIEW myview_now AS SELECT id, name FROM simple where t > current_timestamp;
+CREATE MATERIALIZED VIEW myview_forever AS SELECT id, name FROM simple where t > current_timestamp;
