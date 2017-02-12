@@ -59,8 +59,23 @@ type Index struct {
 	Columns []string // column name or '[function]' for expressions
 }
 
-// Describe a schema. This is the main entry point. Leave schema empty for the
-// public schema.
+// Public is a wrapper around Describe. It needs a pg URL (such as
+// "postgres://localhost"), and it'll return the public schema.
+func Public(pgURL string) (*Schema, error) {
+	cc, err := pgx.ParseURI(pgURL)
+	if err != nil {
+		return nil, err
+	}
+	db, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: cc,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return Describe(db, "public")
+}
+
+// Describe a schema. Leave schema empty for the public schema.
 func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
 	if schema == "" {
 		schema = "public"
