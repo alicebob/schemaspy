@@ -201,7 +201,7 @@ func pgIndex(conn queryer) (map[pgx.Oid]schemaIndex, error) {
 	// But no idea how to use that with multiple expressions.
 	rows, err := conn.Query(`
 			SELECT
-				indexrelid, indrelid, indisunique, indisprimary, indkey::int4[]
+				indexrelid, indrelid, indisunique, indisprimary, indkey[0:array_length(indkey, 1)]::int4[]
 			FROM
 				pg_catalog.pg_index
 		`)
