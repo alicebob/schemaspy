@@ -8,7 +8,7 @@ other means, such as `ALTER TABLE`.
 
 how this is used:
 
-- a maintance script which creates and archives partitioned tables. It needs to know which tables are there already, and which need to be created or have an outdated definition.
+- a maintenance script which creates and archives partitioned tables. It needs to know which tables are there already, and which need to be created or have an outdated definition.
 - to compare on deployment the current database (as returned by schemaspy) against the wanted state, so the deploy process can warn about missing database changes.
 
 # Test

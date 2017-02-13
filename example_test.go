@@ -8,7 +8,7 @@ import (
 )
 
 func Example() {
-	pgURL := "postgres://@localhost"
+	pgURL := "postgres://localhost"
 	schema, err := schemaspy.Public(pgURL)
 	if err != nil {
 		log.Fatal(err)
