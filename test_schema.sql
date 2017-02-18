@@ -24,3 +24,5 @@ CREATE INDEX indexed_name_lower_idx ON indexed (lower(name), minor);
 
 CREATE VIEW myview_now AS SELECT id, name FROM simple where t > current_timestamp;
 CREATE MATERIALIZED VIEW myview_forever AS SELECT id, name FROM simple where t > current_timestamp;
+
+CREATE SEQUENCE countme INCREMENT BY 42 MINVALUE 4001 MAXVALUE 400100 START 40010 CYCLE;

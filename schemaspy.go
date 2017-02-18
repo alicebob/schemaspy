@@ -32,6 +32,8 @@ type Schema struct {
 	// has an entry in Relations
 	Materialized []string
 
+	Sequences map[string]Sequence
+
 	Indexes map[string]Index
 }
 
@@ -57,6 +59,14 @@ type Index struct {
 	Unique  bool
 	Primary bool
 	Columns []string // column name or '[function]' for expressions
+}
+
+type Sequence struct {
+	IncrementBy int
+	MinValue    int
+	MaxValue    int
+	Start       int
+	Cycle       bool
 }
 
 // Public is a wrapper around Describe. It needs a pg URL (such as
@@ -103,11 +113,13 @@ func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
 		Name:      db.NspName,
 		Relations: map[string]Relation{},
 		Indexes:   map[string]Index{},
+		Sequences: map[string]Sequence{},
 	}
 	d.addRelations(oids)
 	d.addInherits(oids)
 	d.addColumns(oids)
 	d.addIndexes(oids)
+	d.addSequences(tx, oids)
 
 	return d, nil
 }
@@ -130,6 +142,9 @@ func (s *Schema) addRelations(oids *_OIDs) {
 			r.Type = "materialized view"
 			s.Materialized = append(s.Materialized, st.RelName)
 			sort.Strings(s.Materialized)
+		case "S":
+			// sequence, handled in addSequences()
+			continue
 		default:
 			continue
 		}
@@ -213,6 +228,22 @@ func (s *Schema) addIndexes(oids *_OIDs) {
 			s.Relations[relName] = rel
 		}
 	}
+}
+
+func (s *Schema) addSequences(tx *pgx.Tx, oids *_OIDs) error {
+	for _, st := range oids.class {
+		switch st.RelKind {
+		case "S":
+			seq, err := loadSequence(tx, s.Name, st.RelName)
+			if err != nil {
+				return err
+			}
+			s.Sequences[st.RelName] = seq
+		default:
+			continue
+		}
+	}
+	return nil
 }
 
 // ColumnNames lists all columns in database order

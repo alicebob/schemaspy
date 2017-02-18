@@ -1,6 +1,8 @@
 package schemaspy
 
 import (
+	"fmt"
+
 	"github.com/jackc/pgx"
 )
 
@@ -260,4 +262,22 @@ func pgAm(conn queryer) (map[pgx.Oid]schemaAm, error) {
 		res[oid] = c
 	}
 	return res, rows.Err()
+}
+
+func loadSequence(tx *pgx.Tx, schema, seq string) (Sequence, error) {
+	row := tx.QueryRow(fmt.Sprintf(`
+			SELECT
+				start_value, increment_by, max_value, min_value, is_cycled
+			FROM
+				%s.%s
+		`, schema, seq))
+	var s Sequence
+	err := row.Scan(
+		&s.Start,
+		&s.IncrementBy,
+		&s.MaxValue,
+		&s.MinValue,
+		&s.Cycle,
+	)
+	return s, err
 }

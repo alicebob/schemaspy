@@ -208,6 +208,26 @@ func TestMaterialized(t *testing.T) {
 	}
 }
 
+func TestSequence(t *testing.T) {
+	d := setup(t)
+	if have, want := len(d.Sequences), 1; have != want {
+		t.Errorf("have %#v, want %#v", have, want)
+	}
+
+	{
+		s := d.Sequences["countme"]
+		if have, want := s, (Sequence{
+			IncrementBy: 42,
+			MinValue:    4001,
+			MaxValue:    400100,
+			Start:       40010,
+			Cycle:       true,
+		}); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+}
+
 func mustDBPool(t *testing.T) *pgx.ConnPool {
 	cc, err := pgx.ParseURI(intPGURL)
 	if err != nil {
