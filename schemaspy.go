@@ -35,6 +35,8 @@ type Schema struct {
 	Sequences map[string]Sequence
 
 	Indexes map[string]Index
+
+	Functions map[string]Function
 }
 
 // Relation is a table, view, or materialized view.
@@ -67,6 +69,12 @@ type Sequence struct {
 	MaxValue    int
 	Start       int
 	Cycle       bool
+}
+
+type Function struct {
+	Language      string
+	ArgumentTypes []string
+	Src           string
 }
 
 // Public is a wrapper around Describe. It needs a pg URL (such as
@@ -114,12 +122,14 @@ func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
 		Relations: map[string]Relation{},
 		Indexes:   map[string]Index{},
 		Sequences: map[string]Sequence{},
+		Functions: map[string]Function{},
 	}
 	d.addRelations(oids)
 	d.addInherits(oids)
 	d.addColumns(oids)
 	d.addIndexes(oids)
 	d.addSequences(tx, oids)
+	d.addFunctions(oids)
 
 	return d, nil
 }
@@ -246,6 +256,23 @@ func (s *Schema) addSequences(tx *pgx.Tx, oids *_OIDs) error {
 	return nil
 }
 
+func (s *Schema) addFunctions(oids *_OIDs) {
+	for _, e := range oids.proc {
+		l, ok := oids.language[e.ProLang]
+		if !ok {
+			continue
+		}
+		f := Function{
+			Language: l.LanName,
+			Src:      e.ProSrc,
+		}
+		for _, t := range e.ProArgTypes {
+			f.ArgumentTypes = append(f.ArgumentTypes, oids.typ[t].TypName)
+		}
+		s.Functions[e.ProName] = f
+	}
+}
+
 // ColumnNames lists all columns in database order
 func (t *Relation) ColumnNames() []string {
 	var names = make([]string, len(t.Columns))
@@ -263,6 +290,8 @@ type _OIDs struct {
 	attribute []schemaAttribute
 	index     map[pgx.Oid]schemaIndex
 	am        map[pgx.Oid]schemaAm
+	proc      map[pgx.Oid]schemaProc
+	language  map[pgx.Oid]schemaLanguage
 }
 
 func loadSchema(tx *pgx.Tx, schema pgx.Oid) (*_OIDs, error) {
@@ -297,6 +326,16 @@ func loadSchema(tx *pgx.Tx, schema pgx.Oid) (*_OIDs, error) {
 	}
 
 	m.am, err = pgAm(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	m.proc, err = pgProc(tx, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	m.language, err = pgLanguage(tx)
 	if err != nil {
 		return nil, err
 	}

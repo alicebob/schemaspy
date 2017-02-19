@@ -281,3 +281,76 @@ func loadSequence(tx *pgx.Tx, schema, seq string) (Sequence, error) {
 	)
 	return s, err
 }
+
+// functions
+// https://www.postgresql.org/docs/9.6/static/catalog-pg-proc.html
+type schemaProc struct {
+	ProName     string
+	ProLang     pgx.Oid
+	ProArgTypes []pgx.Oid
+	ProSrc      string
+}
+
+func pgProc(conn queryer, namespace pgx.Oid) (map[pgx.Oid]schemaProc, error) {
+	rows, err := conn.Query(`
+			SELECT
+				oid, proname, prolang, proargtypes[0:array_length(proargtypes, 1)]::int4[], prosrc
+			FROM
+				pg_catalog.pg_proc
+			WHERE
+				pronamespace=$1
+		`, namespace)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res = map[pgx.Oid]schemaProc{}
+	for rows.Next() {
+		var (
+			t   schemaProc
+			oid pgx.Oid
+			pat []int32
+		)
+		if err := rows.Scan(&oid, &t.ProName, &t.ProLang, &pat, &t.ProSrc); err != nil {
+			return nil, err
+		}
+		for _, o := range pat {
+			t.ProArgTypes = append(t.ProArgTypes, pgx.Oid(o))
+		}
+		res[oid] = t
+	}
+	return res, rows.Err()
+}
+
+// languages
+// https://www.postgresql.org/docs/9.6/static/catalog-pg-language.html
+type schemaLanguage struct {
+	LanName string
+}
+
+func pgLanguage(conn queryer) (map[pgx.Oid]schemaLanguage, error) {
+	rows, err := conn.Query(`
+			SELECT
+				oid, lanname
+			FROM
+				pg_catalog.pg_language
+		`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res = map[pgx.Oid]schemaLanguage{}
+	for rows.Next() {
+		var (
+			t   schemaLanguage
+			oid pgx.Oid
+		)
+		if err := rows.Scan(&oid, &t.LanName); err != nil {
+			return nil, err
+		}
+		res[oid] = t
+	}
+	return res, rows.Err()
+}

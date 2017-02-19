@@ -228,6 +228,35 @@ func TestSequence(t *testing.T) {
 	}
 }
 
+func TestFunctions(t *testing.T) {
+	d := setup(t)
+	if have, want := len(d.Functions), 2; have != want {
+		t.Errorf("have %#v, want %#v", have, want)
+	}
+
+	{
+		s := d.Functions["my_first_sql_function"]
+		if have, want := s, (Function{
+			Language:      "sql",
+			ArgumentTypes: []string(nil),
+			Src:           "\n    SELECT name FROM schemaspyint.indexed\n    WHERE minor < 0;\n",
+		}); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+
+	{
+		s := d.Functions["my_first_plpgsql_function"]
+		if have, want := s, (Function{
+			Language:      "plpgsql",
+			ArgumentTypes: []string{"float4"},
+			Src:           "\nBEGIN\n    RETURN subtotal * 0.06;\nEND;\n",
+		}); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+}
+
 func mustDBPool(t *testing.T) *pgx.ConnPool {
 	cc, err := pgx.ParseURI(intPGURL)
 	if err != nil {
