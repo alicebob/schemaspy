@@ -120,12 +120,13 @@ func pgAttribute(conn queryer) ([]schemaAttribute, error) {
 // https://www.postgresql.org/docs/9.6/static/catalog-pg-type.html
 type schemaType struct {
 	TypName string
+	TypElem pgx.Oid
 }
 
 func pgType(conn queryer) (map[pgx.Oid]schemaType, error) {
 	rows, err := conn.Query(`
 			SELECT
-				oid, typname
+				oid, typname, typelem
 			FROM
 				pg_catalog.pg_type
 		`)
@@ -143,6 +144,7 @@ func pgType(conn queryer) (map[pgx.Oid]schemaType, error) {
 		if err := rows.Scan(
 			&oid,
 			&c.TypName,
+			&c.TypElem,
 		); err != nil {
 			return nil, err
 		}

@@ -230,7 +230,7 @@ func TestSequence(t *testing.T) {
 
 func TestFunctions(t *testing.T) {
 	d := setup(t)
-	if have, want := len(d.Functions), 2; have != want {
+	if have, want := len(d.Functions), 3; have != want {
 		t.Errorf("have %#v, want %#v", have, want)
 	}
 
@@ -251,6 +251,17 @@ func TestFunctions(t *testing.T) {
 			Language:      "plpgsql",
 			ArgumentTypes: []string{"float4"},
 			Src:           "\nBEGIN\n    RETURN subtotal * 0.06;\nEND;\n",
+		}); !reflect.DeepEqual(have, want) {
+			t.Errorf("have %#v, want %#v", have, want)
+		}
+	}
+
+	{
+		s := d.Functions["my_first_variadic_function"]
+		if have, want := s, (Function{
+			Language:      "sql",
+			ArgumentTypes: []string{"numeric[]"},
+			Src:           "\n    SELECT min($1[i]) FROM generate_subscripts($1, 1) g(i);\n",
 		}); !reflect.DeepEqual(have, want) {
 			t.Errorf("have %#v, want %#v", have, want)
 		}

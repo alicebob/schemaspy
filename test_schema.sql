@@ -37,3 +37,7 @@ BEGIN
     RETURN subtotal * 0.06;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE FUNCTION my_first_variadic_function(VARIADIC arr numeric[]) RETURNS numeric AS $$
+    SELECT min($1[i]) FROM generate_subscripts($1, 1) g(i);
+$$ LANGUAGE SQL;

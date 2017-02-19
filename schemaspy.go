@@ -199,7 +199,7 @@ func (s *Schema) addColumns(oids *_OIDs) {
 			continue
 		}
 		rel.Columns[ct.AttName] = Column{
-			Type:     oids.typ[ct.AttTypID].TypName,
+			Type:     oids.typeName(ct.AttTypID),
 			NotNull:  ct.AttNotNull,
 			Position: ct.AttNum,
 		}
@@ -267,7 +267,7 @@ func (s *Schema) addFunctions(oids *_OIDs) {
 			Src:      e.ProSrc,
 		}
 		for _, t := range e.ProArgTypes {
-			f.ArgumentTypes = append(f.ArgumentTypes, oids.typ[t].TypName)
+			f.ArgumentTypes = append(f.ArgumentTypes, oids.typeName(t))
 		}
 		s.Functions[e.ProName] = f
 	}
@@ -341,4 +341,15 @@ func loadSchema(tx *pgx.Tx, schema pgx.Oid) (*_OIDs, error) {
 	}
 
 	return m, nil
+}
+
+// give the name of a pg datatype. Returns 'float' for a simple type, or
+// 'float[]' for an array.
+func (db *_OIDs) typeName(oid pgx.Oid) string {
+	t := db.typ[oid]
+	if t.TypElem == 0 {
+		return t.TypName
+	}
+	et := db.typ[t.TypElem]
+	return et.TypName + "[]"
 }
