@@ -95,14 +95,29 @@ func Public(pgURL string) (*Schema, error) {
 
 // Describe a schema. Leave schema empty for the public schema.
 func Describe(conn *pgx.ConnPool, schema string) (*Schema, error) {
-	if schema == "" {
-		schema = "public"
-	}
 	tx, err := conn.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
+	return DescribeTx(tx, schema)
+}
+
+// Describe a schema. Leave schema empty for the public schema.
+func DescribeConn(conn *pgx.Conn, schema string) (*Schema, error) {
+	tx, err := conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	return DescribeTx(tx, schema)
+}
+
+// Describe a schema. Leave schema empty for the public schema.
+func DescribeTx(tx *pgx.Tx, schema string) (*Schema, error) {
+	if schema == "" {
+		schema = "public"
+	}
 
 	dbs, err := pgNamespace(tx)
 	if err != nil {
